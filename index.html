@@ -158,12 +158,45 @@
 
             <!-- Mode: Learn -->
             <div id="mode-learn" class="mode-content hidden">
-                <!-- Learn logic injected here -->
-                <div class="text-center" style="padding: 4rem;">
-                    <h3 style="margin-bottom: 1rem;">Learn Mode</h3>
-                    <p class="text-secondary">Type the answer to master your terms.</p>
-                    <button class="btn btn-primary" style="margin-top: 1rem;" onclick="app.startLearn()">Start
-                        Learning</button>
+                <!-- Setup Phase -->
+                <div id="learn-setup" class="text-center" style="padding: 4rem;">
+                    <h3 style="margin-bottom: 2rem;">Learn Mode</h3>
+                    <div class="flex justify-center gap-2 mb-4">
+                        <button class="btn btn-primary" onclick="app.startLearnSession('all')">Study All</button>
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary hidden" id="btn-learn-missed"
+                            onclick="app.startLearnSession('missed')" style="color: var(--error);">Study Missed
+                            Terms</button>
+                    </div>
+                </div>
+
+                <!-- Active Phase -->
+                <div id="learn-active" class="hidden">
+                    <div class="flashcard-container">
+                        <div class="flashcard" id="learn-card" onclick="app.flipLearnCard()">
+                            <div class="card-face front">
+                                <p id="learn-q">Question</p>
+                            </div>
+                            <div class="card-face back">
+                                <p id="learn-a">Answer</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="controls text-center" style="margin-top: 2rem;">
+                        <div id="learn-controls-pre">
+                            <p class="text-secondary mb-2">Tap card to flip</p>
+                        </div>
+                        <div id="learn-controls-post" class="hidden flex justify-center gap-4">
+                            <button class="btn btn-secondary" style="border-color: var(--error); color: var(--error);"
+                                onclick="app.gradeLearnCard(false)">Needs Practice</button>
+                            <button class="btn btn-primary"
+                                style="background: var(--success); border-color: var(--success);"
+                                onclick="app.gradeLearnCard(true)">Got it</button>
+                        </div>
+                        <div class="mt-4 text-secondary font-bold" id="learn-progress">1 / 10</div>
+                    </div>
                 </div>
             </div>
 
@@ -205,8 +238,12 @@
     <div id="create-modal" class="modal-overlay">
         <div class="modal">
             <div class="flex justify-between items-center" style="margin-bottom: 2rem;">
-                <h2 class="font-bold" style="font-size: 1.5rem;">Create a new study set</h2>
-                <button class="btn btn-secondary" onclick="app.closeCreateModal()">Cancel</button>
+                <h2 class="font-bold" style="font-size: 1.5rem;" id="modal-title">Create a new study set</h2>
+                <div class="flex gap-2">
+                    <button class="btn btn-secondary text-error hidden" id="btn-delete-set"
+                        onclick="app.deleteCurrentSet()">Delete Set</button>
+                    <button class="btn btn-secondary" onclick="app.closeCreateModal()">Cancel</button>
+                </div>
             </div>
 
             <div class="input-group">
