@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlashMaster - Study Tool</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Ionicons for icons -->
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+</head>
+
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="#" class="logo" onclick="app.navigateHome()">FlashMaster</a>
+        <div class="flex gap-2">
+            <button class="btn btn-secondary" onclick="app.openAnalytics()">
+                <ion-icon name="stats-chart-outline" style="margin-right: 0.5rem;"></ion-icon>
+                My Learning
+            </button>
+            <button class="btn btn-primary" onclick="app.openCreateModal()">
+                <ion-icon name="add-outline" style="margin-right: 0.5rem; font-size: 1.2rem;"></ion-icon>
+                Create Set
+            </button>
+        </div>
+    </nav>
+
+    <div class="container">
+
+        <!-- View: Analytics (My Learning) -->
+        <div id="view-analytics" class="hidden">
+            <h2 class="font-bold" style="font-size: 1.5rem; margin-bottom: 2rem;">Learning Activity</h2>
+
+            <!-- Stats Overview -->
+            <div class="set-grid" style="margin-top: 0; margin-bottom: 2rem;">
+                <div class="set-card" style="text-align: center; cursor: default;">
+                    <div class="text-secondary font-bold">Total Reviews</div>
+                    <div class="font-bold" style="font-size: 2.5rem; color: var(--primary);" id="stat-reviews">0</div>
+                </div>
+                <div class="set-card" style="text-align: center; cursor: default;">
+                    <div class="text-secondary font-bold">Accuracy</div>
+                    <div class="font-bold" style="font-size: 2.5rem; color: var(--success);" id="stat-accuracy">0%</div>
+                </div>
+                <div class="set-card" style="text-align: center; cursor: default;">
+                    <div class="text-secondary font-bold">Time Spent</div>
+                    <div class="font-bold" style="font-size: 2.5rem; color: var(--gold);" id="stat-time">0m</div>
+                </div>
+            </div>
+
+            <!-- Charts / Lists -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                <div>
+                    <h3 class="font-bold mb-4">Recommended Study</h3>
+                    <div id="analytics-recommendations">
+                        <p class="text-secondary">No recommendations yet.</p>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="font-bold mb-4">Recent Activity</h3>
+                    <div id="analytics-history" style="max-height: 400px; overflow-y: auto;">
+                        <p class="text-secondary">No history found.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Dashboard -->
+        <div id="view-dashboard">
+            <h2 class="font-bold" style="font-size: 1.5rem; margin-bottom: 1rem;">Your Study Sets</h2>
+            <div id="sets-container" class="set-grid">
+                <!-- Sets will be injected here -->
+                <div class="set-card skeleton">
+                    <p>Loading sets...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Set Detail -->
+        <div id="view-set" class="hidden">
+            <div class="set-header">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <button class="btn btn-secondary" onclick="app.navigateHome()"
+                            style="margin-bottom: 1rem; padding: 0.5rem 1rem;">
+                            <ion-icon name="arrow-back"></ion-icon> Back
+                        </button>
+                        <h1 id="set-title-display" class="font-bold" style="font-size: 2rem;">Set Title</h1>
+                        <p id="set-desc-display" class="text-secondary">Description goes here</p>
+
+                        <!-- Progress Bar (Added for Bug Fix) -->
+                        <div class="progress-section" style="margin-top: 1rem; max-width: 400px;">
+                            <div class="flex justify-between text-secondary"
+                                style="font-size: 0.875rem; margin-bottom: 0.25rem;">
+                                <span>Mastery</span>
+                                <span id="mastery-percent">0%</span>
+                            </div>
+                            <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                                <div id="mastery-bar"
+                                    style="background: var(--success); height: 100%; width: 0%; transition: width 0.5s;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary" onclick="app.openEditModal(window.app.currentSet)">
+                            <ion-icon name="create-outline" style="margin-right: 0.5rem;"></ion-icon> Edit Set
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modes Navigation -->
+            <div class="mode-tabs">
+                <div class="mode-tab active" data-mode="flashcards" onclick="app.switchMode('flashcards')">Flashcards
+                </div>
+                <div class="mode-tab" data-mode="learn" onclick="app.switchMode('learn')">Learn</div>
+                <div class="mode-tab" data-mode="test" onclick="app.switchMode('test')">Test</div>
+            </div>
+
+            <!-- Mode: Flashcards -->
+            <div id="mode-flashcards" class="mode-content">
+                <div class="flashcard-container">
+                    <div class="flashcard" id="flashcard" onclick="this.classList.toggle('flipped')">
+                        <div class="card-face front">
+                            <p id="card-term">Term</p>
+                        </div>
+                        <div class="card-face back">
+                            <p id="card-def">Definition</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button class="control-btn" onclick="app.prevCard()">
+                        <ion-icon name="arrow-back"></ion-icon>
+                    </button>
+                    <span id="card-counter" class="items-center flex font-bold text-secondary">1 / 10</span>
+                    <button class="control-btn" onclick="app.nextCard()">
+                        <ion-icon name="arrow-forward"></ion-icon>
+                    </button>
+                </div>
+
+                <!-- Terms List (Quizlet style below cards) -->
+                <div class="terms-list-section">
+                    <div class="flex justify-between items-center" style="margin-bottom: 1rem;">
+                        <h3 class="font-bold text-secondary">Terms in this set (<span id="term-count">0</span>)</h3>
+                    </div>
+                    <div id="terms-list-container" class="terms-list">
+                        <!-- Terms injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mode: Learn -->
+            <div id="mode-learn" class="mode-content hidden">
+                <!-- Learn logic injected here -->
+                <div class="text-center" style="padding: 4rem;">
+                    <h3 style="margin-bottom: 1rem;">Learn Mode</h3>
+                    <p class="text-secondary">Type the answer to master your terms.</p>
+                    <button class="btn btn-primary" style="margin-top: 1rem;" onclick="app.startLearn()">Start
+                        Learning</button>
+                </div>
+            </div>
+
+            <!-- Mode: Test -->
+            <div id="mode-test" class="mode-content hidden">
+                <!-- Test Configuration -->
+                <div id="test-config" class="text-center" style="padding: 2rem; max-width: 600px; margin: 0 auto;">
+                    <h3 style="margin-bottom: 2rem;">Set up your test</h3>
+
+                    <div class="config-section">
+                        <label class="font-bold block" style="margin-bottom: 1rem;">Question Types</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" id="test-type-tf" checked> True/False</label>
+                            <label><input type="checkbox" id="test-type-mc" checked> Multiple Choice</label>
+                            <label><input type="checkbox" id="test-type-written" checked> Written</label>
+                        </div>
+                    </div>
+
+                    <div class="config-section" style="margin-top: 2rem;">
+                        <label class="font-bold block" style="margin-bottom: 1rem;">Question Count</label>
+                        <input type="number" id="test-count" class="input-field" value="20" min="1" max="100"
+                            style="width: 100px;">
+                    </div>
+
+                    <button class="btn btn-primary" style="margin-top: 2rem;" onclick="app.startTest()">Start
+                        Test</button>
+                </div>
+
+                <!-- Actual Test Container -->
+                <div id="test-container" class="hidden">
+                    <!-- Questions injected here -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Create Set Modal -->
+    <div id="create-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="flex justify-between items-center" style="margin-bottom: 2rem;">
+                <h2 class="font-bold" style="font-size: 1.5rem;">Create a new study set</h2>
+                <button class="btn btn-secondary" onclick="app.closeCreateModal()">Cancel</button>
+            </div>
+
+            <div class="input-group">
+                <label class="input-label">Title</label>
+                <input type="text" id="new-set-title" class="input-field"
+                    placeholder="Enter a title, like 'Biology - Chapter 22'">
+            </div>
+            <div class="input-group">
+                <label class="input-label">Description</label>
+                <textarea id="new-set-desc" class="input-field" placeholder="Add a description..." rows="2"></textarea>
+            </div>
+
+            <div class="card-rows" id="create-card-rows">
+                <!-- Rows injected here -->
+            </div>
+
+            <button class="btn btn-secondary" onclick="app.addCardRow()"
+                style="margin-bottom: 2rem; margin-top: 1rem; width: 100%;">
+                + Add Card
+            </button>
+
+            <button class="btn btn-primary" onclick="app.saveSet()" style="align-self: flex-end;">Create</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/db.js"></script>
+    <script type="module" src="js/app.js"></script>
+
+</body>
+
+</html>
