@@ -524,3 +524,14 @@ body {
 .text-success {
   color: var(--success);
 }
+
+/* Multiline Support */
+.term-def,
+.flashcard-back,
+.card-face,
+.term-def p,
+.flashcard-back p,
+.card-face p {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}

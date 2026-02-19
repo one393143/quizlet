@@ -214,7 +214,7 @@ class App {
     async saveTerm(index) {
         const item = document.getElementById(`term-item-${index}`);
         const nT = item.querySelector('.term-edit-input').value.trim();
-        const nD = item.querySelector('.def-edit-input').value.trim();
+        const nD = item.querySelector('textarea.def-edit-input').value.trim();
         if (!nT || !nD) return alert("Required");
         this.currentSet.cards[index] = { term: nT, definition: nD };
         await this.saveCurrentSet();
@@ -606,7 +606,7 @@ class App {
     addCardRow(t = '', d = '') {
         const row = document.createElement('div'); row.className = 'card-row';
         row.innerHTML = `<div style="flex:1"><label class="input-label">Term</label><input type="text" class="input-field term-input" value="${this.escapeHtml(t)}"></div>
-         <div style="flex:1"><label class="input-label">Definition</label><input type="text" class="input-field def-input" value="${this.escapeHtml(d)}"></div>
+         <div style="flex:1"><label class="input-label">Definition</label><textarea class="input-field def-input" rows="3">${this.escapeHtml(d)}</textarea></div>
          <button class="delete-row" onclick="this.parentElement.remove()"><ion-icon name="trash-outline"></ion-icon></button>`;
         this.elements.createCardRows.appendChild(row);
     }
