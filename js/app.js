@@ -56,6 +56,7 @@ class App {
     async init() { await this.loadSets(); }
     navigateHome() {
         this.elements.viewSet.classList.add('hidden');
+        document.getElementById('view-analytics').classList.add('hidden');
         this.elements.viewDashboard.classList.remove('hidden');
         this.loadSets();
     }
@@ -71,8 +72,10 @@ class App {
                 return;
             }
             sets.forEach(set => {
-                // Init progress object if missing
-                if (!set.progress) set.progress = { learn: {}, test: {} };
+                // Init progress object if missing or incomplete
+                if (!set.progress) set.progress = {};
+                if (!set.progress.learn) set.progress.learn = {};
+                if (!set.progress.test) set.progress.test = {};
 
                 const card = document.createElement('div');
                 card.className = 'set-card';
@@ -84,19 +87,27 @@ class App {
                 `;
                 this.elements.setsContainer.appendChild(card);
             });
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error(e);
+            this.elements.setsContainer.innerHTML = '<p class="text-error">Error loading sets. See console.</p>';
+        }
     }
 
     getMiniProgressBar(set) {
         if (!set.cards.length) return '';
-        const learnedCount = Object.values(set.progress.learn).filter(s => s === 'mastered').length;
+        // Safety check
+        const learnProgress = set.progress && set.progress.learn ? set.progress.learn : {};
+        const learnedCount = Object.values(learnProgress).filter(s => s === 'mastered').length;
         const pct = Math.round((learnedCount / set.cards.length) * 100);
         return `<div style="height:4px; background:#e0e0e0; margin-top:1rem; border-radius:2px;"><div style="width:${pct}%; height:100%; background:var(--success); border-radius:2px;"></div></div>`;
     }
 
     openSet(set) {
         this.currentSet = set;
-        if (!this.currentSet.progress) this.currentSet.progress = { learn: {}, test: {} };
+        // Re-ensure structure
+        if (!this.currentSet.progress) this.currentSet.progress = {};
+        if (!this.currentSet.progress.learn) this.currentSet.progress.learn = {};
+        if (!this.currentSet.progress.test) this.currentSet.progress.test = {};
 
         this.elements.setTitleDisplay.textContent = set.title;
         this.elements.setDescDisplay.textContent = set.description || '';
@@ -114,6 +125,7 @@ class App {
         // Ideally we track specific indices. For now we rely on learn progress.
 
         this.elements.viewDashboard.classList.add('hidden');
+        document.getElementById('view-analytics').classList.add('hidden');
         this.elements.viewSet.classList.remove('hidden');
         this.switchMode('flashcards');
     }
@@ -126,9 +138,9 @@ class App {
         this.elements.masteryPercent.textContent = `${pct}%`;
     }
 
-    /* --- Inline Edit --- */
+    /* --- Inline Edit & UI Enhancements --- */
     renderTermList(cards) {
-        this.elements.termsListContainer.innerHTML = cards.map((card, index) => {
+        let html = cards.map((card, index) => {
             const status = this.currentSet.progress.learn[index];
             const statusColor = status === 'mastered' ? 'var(--success)' : (status === 'review' ? 'var(--error)' : 'transparent');
             return `
@@ -146,17 +158,56 @@ class App {
                 </div>
             </div>`;
         }).join('');
+
+        // Add "Add Card" button at the end of the list
+        html += `
+            <div class="text-center mt-4">
+                <button class="btn btn-secondary" onclick="app.addNewCard()">
+                    <ion-icon name="add-circle-outline" style="margin-right: 0.5rem;"></ion-icon> Add Card
+                </button>
+            </div>
+        `;
+        this.elements.termsListContainer.innerHTML = html;
     }
+
+    async addNewCard() {
+        // Prompt user quickly or just append empty? Let's append empty and enter edit mode.
+        this.currentSet.cards.push({ term: "New Term", definition: "New Definition" });
+        await this.saveCurrentSet(); // Save immediately to persist
+        this.renderTermList(this.currentSet.cards);
+        this.editTerm(this.currentSet.cards.length - 1); // Auto open edit
+    }
+
+    async deleteCard(index) {
+        if (!confirm("Delete this card?")) return;
+        this.currentSet.cards.splice(index, 1);
+        await this.saveCurrentSet();
+        this.renderTermList(this.currentSet.cards);
+    }
+
+    // Helper to save current set structure (title/desc/cards) ignoring progress update
+    async saveCurrentSet() {
+        await dbService.updateSet(this.currentSet.id, this.currentSet.title, this.currentSet.description, this.currentSet.cards);
+    }
+
     editTerm(index) {
         const item = document.getElementById(`term-item-${index}`);
         const card = this.currentSet.cards[index];
         item.classList.add('editing');
+        // Changed input to textarea for definition
         item.innerHTML = `
-            <div class="term-item-col"><label class="input-label">Term</label><input type="text" class="input-field term-edit-input" value="${this.escapeHtml(card.term)}"></div>
-            <div class="term-item-col"><label class="input-label">Definition</label><input type="text" class="input-field def-edit-input" value="${this.escapeHtml(card.definition)}"></div>
-            <div class="term-actions">
-                 <button class="btn btn-primary" style="padding: 0.5rem;" onclick="app.saveTerm(${index})">Save</button>
-                 <button class="btn btn-secondary" style="padding: 0.5rem;" onclick="app.cancelEditTerm(${index})">Cancel</button>
+            <div class="term-item-col">
+                <label class="input-label">Term</label>
+                <input type="text" class="input-field term-edit-input" value="${this.escapeHtml(card.term)}">
+            </div>
+            <div class="term-item-col">
+                <label class="input-label">Definition</label>
+                <textarea class="input-field def-edit-input" rows="3">${this.escapeHtml(card.definition)}</textarea>
+            </div>
+            <div class="term-actions" style="flex-direction: column; gap: 0.5rem;">
+                 <button class="btn btn-primary" style="padding: 0.5rem; width: 100%;" onclick="app.saveTerm(${index})">Save</button>
+                 <button class="btn btn-secondary" style="padding: 0.5rem; width: 100%;" onclick="app.cancelEditTerm(${index})">Cancel</button>
+                 <button class="btn btn-secondary text-error" style="padding: 0.5rem; width: 100%;" onclick="app.deleteCard(${index})"><ion-icon name="trash"></ion-icon></button>
             </div>`;
     }
     cancelEditTerm(index) { this.renderTermList(this.currentSet.cards); }
@@ -166,24 +217,22 @@ class App {
         const nD = item.querySelector('.def-edit-input').value.trim();
         if (!nT || !nD) return alert("Required");
         this.currentSet.cards[index] = { term: nT, definition: nD };
-        await dbService.updateSet(this.currentSet.id, this.currentSet.title, this.currentSet.description, this.currentSet.cards);
+        await this.saveCurrentSet();
         this.renderTermList(this.currentSet.cards);
     }
 
-    /* --- Learn Mode --- */
+    /* --- Learn Mode & Scientific SRS V2 --- */
     startLearnSession(scope) {
         let indices = this.currentSet.cards.map((_, i) => i);
         if (scope === 'missed') {
             indices = indices.filter(i => this.currentSet.progress.learn[i] === 'review');
         } else {
-            // Prioritize unlearned
+            // Sort by Needs Review -> New -> Mastered
             indices.sort((a, b) => {
                 const sA = this.currentSet.progress.learn[a] || 'new';
                 const sB = this.currentSet.progress.learn[b] || 'new';
-                if (sA === 'review') return -1;
-                if (sB === 'review') return 1;
-                if (sA === 'new') return -1;
-                return 1;
+                const rank = { 'review': 0, 'new': 1, 'mastered': 2 };
+                return rank[sA] - rank[sB];
             });
         }
         this.learnQueue = indices;
@@ -196,18 +245,18 @@ class App {
 
     nextLearnCard() {
         if (this.learnIndex >= this.learnQueue.length) {
-            // End of round
-            if (this.learnQueue.length > 0) {
-                // Check if we have any 'review' items left to loop again? 
-                // For now just finish
-            }
-            this.elements.learnActive.innerHTML = `<div class="text-center"><h3>Session Complete!</h3><button class="btn btn-primary mt-4" onclick="app.switchMode('learn')">Back to Menu</button></div>`;
+            this.elements.learnActive.innerHTML = `
+                <div class="text-center" style="padding: 2rem;">
+                    <h3>Session Complete!</h3>
+                    <p class="text-secondary mt-2">Come back tomorrow to strengthen your memory!</p>
+                    <button class="btn btn-primary mt-4" onclick="app.switchMode('learn')">Back to Menu</button>
+                </div>`;
             return;
         }
         const cardIdx = this.learnQueue[this.learnIndex];
         const card = this.currentSet.cards[cardIdx];
 
-        this.elements.learnQ.textContent = card.term; // Configurable later
+        this.elements.learnQ.textContent = card.term;
         this.elements.learnA.textContent = card.definition;
         this.elements.learnCard.classList.remove('flipped');
 
@@ -224,59 +273,101 @@ class App {
         this.elements.learnPost.classList.remove('hidden');
     }
 
+    /* Scientific SRS Algorithm (Forgetting Curve) */
     async gradeLearnCard(known) {
         const cardIdx = this.learnQueue[this.learnIndex];
-        // simple tracking: known = mastered, unknown = review
-        this.currentSet.progress.learn[cardIdx] = known ? 'mastered' : 'review';
+        const now = Date.now();
 
-        // Save to DB (debounced normally, but direct here for simplicity)
-        dbService.updateProgress(this.currentSet.id, this.currentSet.progress);
+        // Log History
+        if (!this.currentSet.history) this.currentSet.history = [];
+        this.currentSet.history.push({ cardIdx, result: known ? 'correct' : 'wrong', mode: 'learn', ts: now });
+
+        // Update SRS
+        if (!this.currentSet.srs) this.currentSet.srs = {};
+        let srsItem = this.currentSet.srs[cardIdx] || { interval: 0, stage: 0, dueDate: 0 };
 
         if (!known) {
-            // Re-queue at end if unknow
+            // Reset to Day 1
+            srsItem.stage = 0;
+            srsItem.interval = 0;
+            srsItem.dueDate = now + (1000 * 60); // 1 min (immediate review)
+            this.currentSet.progress.learn[cardIdx] = 'review';
+            // Logic: if wrong, push to end of current queue to review again THIS session?
+            // For simple "Forgetting curve", we just mark it.
+            // But usually you want to clear it today. Let's push to queue.
             this.learnQueue.push(cardIdx);
+        } else {
+            // Move up the ladder: 1d -> 3d -> 7d -> 14d -> 30d
+            const intervals = [1, 3, 7, 14, 30];
+            let currentStage = srsItem.stage || 0;
+
+            if (currentStage < intervals.length) {
+                srsItem.interval = intervals[currentStage];
+                srsItem.stage = currentStage + 1;
+            } else {
+                srsItem.interval = 30; // Max out at monthly
+            }
+
+            srsItem.dueDate = now + (srsItem.interval * 24 * 60 * 60 * 1000);
+            this.currentSet.progress.learn[cardIdx] = 'mastered';
         }
+        this.currentSet.srs[cardIdx] = srsItem;
+
+        // Save progress Flattened
+        const dataToUpdate = {
+            progress: this.currentSet.progress,
+            history: this.currentSet.history,
+            srs: this.currentSet.srs
+        };
+        dbService.updateProgress(this.currentSet.id, dataToUpdate);
 
         this.learnIndex++;
         this.updateMasteryUI();
         this.nextLearnCard();
     }
 
-    /* --- Test Mode --- */
+    /* --- Test Mode V2 (Step-by-step) --- */
     startTest(scope) {
-        // Config reading
+        /* Config Reading */
         const useTF = document.getElementById('test-type-tf').checked;
         const useMC = document.getElementById('test-type-mc').checked;
         const useWritten = document.getElementById('test-type-written').checked;
         const isStrict = document.getElementById('test-strict').checked;
-        const dir = document.querySelector('input[name="test-dir"]:checked').value; // term_def or def_term
+        const dirEl = document.querySelector('input[name="test-dir"]:checked');
+        const dir = dirEl ? dirEl.value : 'term_def';
         let count = parseInt(document.getElementById('test-count').value);
 
         if (!useTF && !useMC && !useWritten) { alert("Select at least one type."); return; }
-
         this.testConfig = { useTF, useMC, useWritten, isStrict, dir };
 
+        /* View Switching */
         this.elements.testConfig.classList.add('hidden');
         this.elements.testContainer.classList.remove('hidden');
 
-        // Scope Logic
+        /* Question Generation */
         let indices = this.currentSet.cards.map((_, i) => i);
         if (scope === 'missed') {
             indices = indices.filter(i => this.currentSet.progress.learn[i] === 'review');
             if (indices.length < 1) { alert("No missed terms found!"); return this.switchMode('test'); }
         }
 
-        // Generate
         const questions = this.generateQuestions(indices, count);
-        this.renderTest(questions);
+
+        // Init Test State
+        this.testState = {
+            questions: questions,
+            currentIndex: 0,
+            score: 0,
+            answers: [] // { question, userCorrect, correctAns }
+        };
+
+        this.renderTestQuestion();
     }
 
     generateQuestions(indices, count) {
-        // Shuffle indices
         indices.sort(() => Math.random() - 0.5);
         const loopCount = Math.min(count, indices.length);
         const qList = [];
-
         const types = [];
         if (this.testConfig.useTF) types.push('tf');
         if (this.testConfig.useMC) types.push('mc');
@@ -286,8 +377,6 @@ class App {
             const idx = indices[i];
             const card = this.currentSet.cards[idx];
             const type = types[Math.floor(Math.random() * types.length)];
-
-            // Direction Logic
             const qText = this.testConfig.dir === 'term_def' ? card.term : card.definition;
             const aText = this.testConfig.dir === 'term_def' ? card.definition : card.term;
 
@@ -313,80 +402,151 @@ class App {
         return qList;
     }
 
-    renderTest(questions) {
-        this.elements.testContainer.innerHTML = '';
-        questions.forEach(q => {
-            const el = document.createElement('div');
-            el.className = 'test-question';
-            el.dataset.idx = q.idx; // Store card index
+    renderTestQuestion() {
+        const q = this.testState.questions[this.testState.currentIndex];
 
-            let html = `<h4 class="text-secondary">Q${q.id + 1}</h4><h3 class="font-bold mb-4">${this.escapeHtml(q.qText)}</h3>`;
+        // Progress Indicator
+        let html = `
+            <div class="flex justify-between items-center mb-4 text-secondary">
+                <span>Question ${this.testState.currentIndex + 1} of ${this.testState.questions.length}</span>
+                <span>Type: ${q.type.toUpperCase()}</span>
+            </div>
+            <div class="test-question active" style="margin-bottom: 2rem;">
+                <h2 class="font-bold mb-6" style="font-size: 1.5rem;">${this.escapeHtml(q.qText)}</h2>
+        `;
 
-            if (q.type === 'mc') {
-                html += `<div class="test-options">`;
-                q.options.forEach(opt => html += `<div class="test-option" onclick="app.answerMC(this, '${opt === q.aText}')">${this.escapeHtml(opt)}</div>`);
-                html += `</div>`;
-            } else if (q.type === 'tf') {
-                html += `<div class="mb-2">Is this: <strong>${this.escapeHtml(q.displayA)}</strong>?</div>`;
-                html += `<div class="tf-options"><div class="tf-btn true" onclick="app.answerTF(this, ${q.isTrue}, true)">True</div><div class="tf-btn false" onclick="app.answerTF(this, ${q.isTrue}, false)">False</div></div>`;
-            } else if (q.type === 'written') {
-                html += `<div><input type="text" class="input-field answer-input" placeholder="Type answer..."><button class="btn btn-primary mt-2" onclick="app.answerWritten(this, '${this.escapeHtml(q.aText)}')">Check</button></div>`;
-            }
-            html += `<div class="test-feedback"></div>`;
-            el.innerHTML = html;
-            this.elements.testContainer.appendChild(el);
-        });
-        const btn = document.createElement('div');
-        btn.innerHTML = `<button class="btn btn-secondary mt-4" onclick="app.finishTest()">Finish Test</button>`;
-        this.elements.testContainer.appendChild(btn);
-    }
+        // Render Options based on type
+        if (q.type === 'mc') {
+            html += `<div class="test-options">`;
+            q.options.forEach((opt, idx) => {
+                html += `<div class="test-option" id="opt-${idx}">${this.escapeHtml(opt)}</div>`;
+            });
+            html += `</div>`;
+        } else if (q.type === 'tf') {
+            html += `
+                <div class="mb-4 text-xl">Is this: <strong>${this.escapeHtml(q.displayA)}</strong>?</div>
+                <div class="tf-options">
+                    <div class="tf-btn true" id="btn-true">True</div>
+                    <div class="tf-btn false" id="btn-false">False</div>
+                </div>`;
+        } else if (q.type === 'written') {
+            html += `
+                <div>
+                    <textarea class="input-field answer-input mb-4" rows="3" placeholder="Type your answer..."></textarea>
+                    <button class="btn btn-primary" id="btn-submit">Submit Answer</button>
+                    <button class="btn btn-secondary" id="btn-dontknow">Don't Know</button>
+                </div>`;
+        }
 
-    /* Test Handlers - Simplified Updating */
-    recordResult(cardIdx, correct) {
-        // Track test results separately? 
-        // User requested separate tracking, so we can store in progress.test
-        if (correct) { /* Maybe count streaks */ }
-        else {
-            // Mark as review in Learn status too? User said separate.
-            // But usually mistakes imply needing review. Let's mark as review in learn for synergy.
-            this.currentSet.progress.learn[cardIdx] = 'review';
+        html += `<div class="test-feedback mt-4"></div></div>`;
+        this.elements.testContainer.innerHTML = html;
+
+        // Bind Events manually to avoid string injection issues
+        if (q.type === 'mc') {
+            q.options.forEach((opt, idx) => {
+                document.getElementById(`opt-${idx}`).onclick = (e) => this.handleMC(e.target, opt === q.aText);
+            });
+        } else if (q.type === 'tf') {
+            document.getElementById('btn-true').onclick = (e) => this.handleTF(e.target, q.isTrue, true);
+            document.getElementById('btn-false').onclick = (e) => this.handleTF(e.target, q.isTrue, false);
+        } else if (q.type === 'written') {
+            const input = this.elements.testContainer.querySelector('.answer-input');
+            document.getElementById('btn-submit').onclick = () => this.handleWritten(input.value, q.aText);
+            document.getElementById('btn-dontknow').onclick = () => this.handleWritten("", q.aText);
+            input.focus();
         }
     }
 
-    // ... Answer handlers (MC, TF) ... 
-    answerMC(el, correct) {
-        const p = el.closest('.test-question');
-        if (p.classList.contains('answered')) return;
-        p.classList.add('answered');
-        if (correct === 'true') { el.classList.add('correct'); this.recordResult(p.dataset.idx, true); }
-        else { el.classList.add('incorrect'); p.querySelector('.test-feedback').innerHTML = '<span class="text-error">Incorrect</span>'; this.recordResult(p.dataset.idx, false); }
-    }
-    answerTF(el, isTrue, userSaidTrue) {
-        const p = el.closest('.test-question');
-        if (p.classList.contains('answered')) return;
-        p.classList.add('answered');
-        const correct = (isTrue === userSaidTrue);
-        if (correct) { el.style.background = '#e6fbf2'; this.recordResult(p.dataset.idx, true); }
-        else { el.style.background = '#ffebeb'; this.recordResult(p.dataset.idx, false); }
-    }
-    answerWritten(btn, ca) {
-        const p = btn.closest('.test-question');
-        if (p.classList.contains('answered')) return;
-        p.classList.add('answered');
-        const ua = p.querySelector('input').value.trim();
+    /* Test Handlers */
+    async handleMC(el, isCorrect) {
+        if (el.classList.contains('correct') || el.classList.contains('incorrect')) return; // already answered
 
-        let correct = false;
-        if (this.testConfig.isStrict) correct = ua === ca;
-        else correct = this.levenshtein(ua.toLowerCase(), ca.toLowerCase()) <= 2; // Fuzzy
+        if (isCorrect) el.classList.add('correct');
+        else el.classList.add('incorrect');
 
-        if (correct) { p.querySelector('.test-feedback').innerHTML = '<span class="text-success">Correct!</span>'; this.recordResult(p.dataset.idx, true); }
-        else { p.querySelector('.test-feedback').innerHTML = `<span class="text-error">Incorrect. Answer: ${ca}</span>`; this.recordResult(p.dataset.idx, false); }
+        await this.processAnswer(isCorrect, isCorrect ? "Correct!" : "Incorrect.");
     }
 
-    finishTest() {
-        dbService.updateProgress(this.currentSet.id, this.currentSet.progress);
+    async handleTF(el, expected, actual) {
+        const isCorrect = expected === actual;
+        if (isCorrect) el.style.background = '#e6fbf2';
+        else el.style.background = '#ffebeb';
+
+        await this.processAnswer(isCorrect, isCorrect ? "Correct!" : "Incorrect.");
+    }
+
+    async handleWritten(userVal, correctVal) {
+        let isCorrect = false;
+        const ua = userVal.trim();
+        if (this.testConfig.isStrict) isCorrect = ua === correctVal;
+        else isCorrect = this.levenshtein(ua.toLowerCase(), correctVal.toLowerCase()) <= 2;
+
+        const feedback = isCorrect ? "Correct!" : `Incorrect. Answer: ${correctVal}`;
+        await this.processAnswer(isCorrect, feedback);
+    }
+
+    async processAnswer(isCorrect, feedbackText) {
+        const fbEl = this.elements.testContainer.querySelector('.test-feedback');
+        fbEl.innerHTML = `<span class="${isCorrect ? 'text-success' : 'text-error'} font-bold">${feedbackText}</span>`;
+
+        // Save Result
+        const q = this.testState.questions[this.testState.currentIndex];
+        this.testState.answers.push({ q, isCorrect });
+        if (isCorrect) this.testState.score++;
+
+        // Log to Global History
+        this.recordResult(q.idx, isCorrect);
+
+        // Wait a moment then nex
+        setTimeout(() => {
+            this.testState.currentIndex++;
+            if (this.testState.currentIndex < this.testState.questions.length) {
+                this.renderTestQuestion();
+            } else {
+                this.renderTestResults();
+            }
+        }, 1500);
+    }
+
+    renderTestResults() {
+        // Save Progress
+        dbService.updateProgress(this.currentSet.id, {
+            progress: this.currentSet.progress,
+            history: this.currentSet.history,
+            srs: this.currentSet.srs
+        });
+
+        const pct = Math.round((this.testState.score / this.testState.questions.length) * 100);
+        let msg = pct >= 80 ? "Great job!" : "Keep practicing!";
+
+        let html = `
+            <div class="text-center" style="padding: 2rem;">
+                <h2 class="font-bold mb-2">Test Complete</h2>
+                <div style="font-size: 3rem; font-weight: 800; color: var(--primary); margin: 1rem 0;">${pct}%</div>
+                <p class="text-secondary mb-6">${msg}</p>
+                
+                <div class="flex justify-center gap-4">
+                     <button class="btn btn-secondary" onclick="app.switchMode('test')">New Test</button>
+                     <button class="btn btn-primary" onclick="app.startTest('missed')">Retest Incorrect</button>
+                </div>
+            </div>
+        `;
+        this.elements.testContainer.innerHTML = html;
         this.updateMasteryUI();
-        this.switchMode('test'); // Back to config
+    }
+
+    recordResult(cardIdx, correct) {
+        if (!this.currentSet.history) this.currentSet.history = [];
+        this.currentSet.history.push({
+            cardIdx,
+            result: correct ? 'correct' : 'wrong',
+            mode: 'test',
+            ts: Date.now()
+        });
+
+        if (!correct) {
+            this.currentSet.progress.learn[cardIdx] = 'review';
+        }
     }
 
     /* Levenshtein for Fuzzy Match */
@@ -493,33 +653,20 @@ class App {
         let correctCount = 0;
         let recentLogs = [];
         let dueSets = [];
-
         sets.forEach(set => {
             if (set.history) {
                 totalReviews += set.history.length;
                 correctCount += set.history.filter(h => h.result === 'correct').length;
-
-                // Add Logs to flat list for display
-                set.history.forEach(h => {
-                    recentLogs.push({ ...h, setName: set.title });
-                });
+                set.history.forEach(h => recentLogs.push({ ...h, setName: set.title }));
             }
-
-            // Check SRS Due
             if (set.srs) {
                 const dueCount = Object.values(set.srs).filter(item => item.dueDate < Date.now()).length;
                 if (dueCount > 0) dueSets.push({ title: set.title, count: dueCount, set });
             }
         });
-
-        // Sort Logs
         recentLogs.sort((a, b) => b.ts - a.ts);
-
-        // Update Stats
         document.getElementById('stat-reviews').textContent = totalReviews;
         document.getElementById('stat-accuracy').textContent = totalReviews ? Math.round((correctCount / totalReviews) * 100) + '%' : '0%';
-
-        // Render History List
         const histContainer = document.getElementById('analytics-history');
         histContainer.innerHTML = recentLogs.slice(0, 20).map(log => `
             <div class="term-item" style="padding: 1rem; border-left-color: ${log.result === 'correct' ? 'var(--success)' : 'var(--error)'}">
@@ -530,19 +677,9 @@ class App {
                 <div>${log.mode.toUpperCase()}</div>
             </div>
         `).join('') || '<p class="text-secondary">No activity recorded.</p>';
-
-        // Render Recommendations
         const recContainer = document.getElementById('analytics-recommendations');
-        if (dueSets.length === 0) {
-            recContainer.innerHTML = '<div class="text-center p-4 bg-white rounded"><p>All caught up! Great job.</p></div>';
-        } else {
-            recContainer.innerHTML = dueSets.map(item => `
-                <div class="set-card" onclick="app.openSetById('${item.set.id}')">
-                    <div class="set-title">${this.escapeHtml(item.title)}</div>
-                    <div class="text-error font-bold">${item.count} due for review</div>
-                </div>
-            `).join('');
-        }
+        if (dueSets.length === 0) recContainer.innerHTML = '<div class="text-center p-4 bg-white rounded"><p>All caught up! Great job.</p></div>';
+        else recContainer.innerHTML = dueSets.map(item => `<div class="set-card" onclick="app.openSetById('${item.set.id}')"><div class="set-title">${this.escapeHtml(item.title)}</div><div class="text-error font-bold">${item.count} due for review</div></div>`).join('');
     }
 
     // Helper to open set by ID from analytics

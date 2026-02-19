@@ -69,15 +69,14 @@ export const dbService = {
             const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js");
             const docRef = doc(db, SETS_COLLECTION, setId);
 
-            // We use dot notation to update nested fields without overwriting the whole map if possible,
-            // but for simplicity here we might be passing the whole progress object or specific keys.
-            // Let's assume progressData is an object like { "progress.learn": ... } or we merge manually.
+            // We flatten the data here to ensure history/srs are saved at root or as intended
+            // progressData is expected to be { progress: {...}, history: [...], srs: {...} }
 
             await updateDoc(docRef, {
-                progress: progressData, // Expecting the full progress object or a merged one from app logic
+                ...progressData,
                 updatedAt: serverTimestamp()
             });
-            console.log("Progress updated");
+            console.log("Progress/History updated");
         } catch (e) {
             console.error("Error updating progress: ", e);
             // Don't throw for progress updates to avoid blocking user flow if offline/error
