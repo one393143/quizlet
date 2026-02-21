@@ -93,16 +93,33 @@
                         <h1 id="set-title-display" class="font-bold" style="font-size: 2rem;">Set Title</h1>
                         <p id="set-desc-display" class="text-secondary">Description goes here</p>
 
-                        <!-- Progress Bar (Added for Bug Fix) -->
-                        <div class="progress-section" style="margin-top: 1rem; max-width: 400px;">
-                            <div class="flex justify-between text-secondary"
-                                style="font-size: 0.875rem; margin-bottom: 0.25rem;">
-                                <span>Mastery</span>
-                                <span id="mastery-percent">0%</span>
+                        <!-- Progress Bars -->
+                        <div class="progress-section"
+                            style="margin-top: 1rem; max-width: 400px; display: flex; gap: 1rem;">
+                            <!-- Learn Mastery -->
+                            <div style="flex: 1;">
+                                <div class="flex justify-between text-secondary"
+                                    style="font-size: 0.875rem; margin-bottom: 0.25rem;">
+                                    <span>Learn Mastery</span>
+                                    <span id="mastery-percent">0%</span>
+                                </div>
+                                <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                                    <div id="mastery-bar"
+                                        style="background: var(--success); height: 100%; width: 0%; transition: width 0.5s;">
+                                    </div>
+                                </div>
                             </div>
-                            <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
-                                <div id="mastery-bar"
-                                    style="background: var(--success); height: 100%; width: 0%; transition: width 0.5s;">
+                            <!-- Test Accuracy -->
+                            <div style="flex: 1;">
+                                <div class="flex justify-between text-secondary"
+                                    style="font-size: 0.875rem; margin-bottom: 0.25rem;">
+                                    <span>Test Accuracy</span>
+                                    <span id="accuracy-percent">0%</span>
+                                </div>
+                                <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                                    <div id="accuracy-bar"
+                                        style="background: var(--primary); height: 100%; width: 0%; transition: width 0.5s;">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -166,8 +183,9 @@
                     </div>
                     <div>
                         <button class="btn btn-secondary hidden" id="btn-learn-missed"
-                            onclick="app.startLearnSession('missed')" style="color: var(--error);">Study Missed
-                            Terms</button>
+                            onclick="app.startLearnSession('missed')"
+                            style="color: var(--primary); border-color: var(--primary);">Continue Studying
+                            (Unmastered)</button>
                     </div>
                 </div>
 

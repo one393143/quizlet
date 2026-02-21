@@ -26,6 +26,8 @@ class App {
             termsListContainer: document.getElementById('terms-list-container'),
             masteryBar: document.getElementById('mastery-bar'),
             masteryPercent: document.getElementById('mastery-percent'),
+            accuracyBar: document.getElementById('accuracy-bar'),
+            accuracyPercent: document.getElementById('accuracy-percent'),
             flashcard: document.getElementById('flashcard'),
             cardTerm: document.getElementById('card-term'),
             cardDef: document.getElementById('card-def'),
@@ -108,6 +110,7 @@ class App {
         if (!this.currentSet.progress) this.currentSet.progress = {};
         if (!this.currentSet.progress.learn) this.currentSet.progress.learn = {};
         if (!this.currentSet.progress.test) this.currentSet.progress.test = {};
+        if (!this.currentSet.testStats) this.currentSet.testStats = {};
 
         this.elements.setTitleDisplay.textContent = set.title;
         this.elements.setDescDisplay.textContent = set.description || '';
@@ -116,8 +119,9 @@ class App {
         this.renderTermList(set.cards);
 
         // Smart Study Buttons visibility
-        const missedLearn = Object.keys(this.currentSet.progress.learn).filter(k => this.currentSet.progress.learn[k] === 'review');
-        if (missedLearn.length > 0) this.elements.btnLearnMissed.classList.remove('hidden');
+        const unmasteredLearn = this.currentSet.cards.map((_, i) => i)
+            .filter(i => this.currentSet.progress.learn[i] !== 'mastered');
+        if (unmasteredLearn.length > 0) this.elements.btnLearnMissed.classList.remove('hidden');
         else this.elements.btnLearnMissed.classList.add('hidden');
 
         // Check if test mistakes exist
@@ -131,11 +135,23 @@ class App {
     }
 
     updateMasteryUI() {
-        const learned = Object.values(this.currentSet.progress.learn).filter(s => s === 'mastered').length;
         const total = this.currentSet.cards.length;
-        const pct = total === 0 ? 0 : Math.round((learned / total) * 100);
-        this.elements.masteryBar.style.width = `${pct}%`;
-        this.elements.masteryPercent.textContent = `${pct}%`;
+        const totalLearned = Object.values(this.currentSet.progress.learn).filter(s => s === 'mastered').length;
+        const learnPct = total === 0 ? 0 : Math.round((totalLearned / total) * 100);
+        this.elements.masteryBar.style.width = `${learnPct}%`;
+        this.elements.masteryPercent.textContent = `${learnPct}%`;
+
+        let testAttempts = 0;
+        let testCorrect = 0;
+        if (this.currentSet.testStats) {
+            Object.values(this.currentSet.testStats).forEach(stat => {
+                testAttempts += stat.totalAttempts || 0;
+                testCorrect += stat.correctAttempts || 0;
+            });
+        }
+        const testPct = testAttempts === 0 ? 0 : Math.round((testCorrect / testAttempts) * 100);
+        this.elements.accuracyBar.style.width = `${testPct}%`;
+        this.elements.accuracyPercent.textContent = `${testPct}%`;
     }
 
     /* --- Inline Edit & UI Enhancements --- */
@@ -143,13 +159,31 @@ class App {
         let html = cards.map((card, index) => {
             const status = this.currentSet.progress.learn[index];
             const statusColor = status === 'mastered' ? 'var(--success)' : (status === 'review' ? 'var(--error)' : 'transparent');
+
+            // Generate test stats HTML
+            const stats = this.currentSet.testStats && this.currentSet.testStats[index] ? this.currentSet.testStats[index] : null;
+            let statsHtml = '';
+            if (stats && stats.totalAttempts > 0) {
+                const acc = Math.round((stats.correctAttempts / stats.totalAttempts) * 100);
+                const recent = (stats.history || []).map(r => r ? '✅' : '❌').join('');
+                statsHtml = `
+                    <div class="card-stats">
+                        <span>Accuracy: <strong>${acc}%</strong> (${stats.correctAttempts}/${stats.totalAttempts})</span>
+                        <span>Recent: <strong class="stat-trend">${recent}</strong></span>
+                    </div>
+                `;
+            } else {
+                statsHtml = `<div class="card-stats"><span>No test data yet.</span></div>`;
+            }
+
             return `
             <div class="term-item" id="term-item-${index}" style="border-left-color: ${statusColor}">
-                <div class="term-item-col">
+                <div class="term-item-col" style="flex: 2;">
                     <div class="term-label">Term</div>
-                    <div class="term-text">${this.escapeHtml(card.term)}</div>
+                    <div class="term-text font-bold">${this.escapeHtml(card.term)}</div>
+                    ${statsHtml}
                 </div>
-                <div class="term-item-col">
+                <div class="term-item-col" style="flex: 3;">
                     <div class="term-label">Definition</div>
                     <div class="term-def">${this.escapeHtml(card.definition)}</div>
                 </div>
@@ -225,7 +259,7 @@ class App {
     startLearnSession(scope) {
         let indices = this.currentSet.cards.map((_, i) => i);
         if (scope === 'missed') {
-            indices = indices.filter(i => this.currentSet.progress.learn[i] === 'review');
+            indices = indices.filter(i => this.currentSet.progress.learn[i] !== 'mastered');
         } else {
             // Sort by Needs Review -> New -> Mastered
             indices.sort((a, b) => {
@@ -257,7 +291,9 @@ class App {
         const card = this.currentSet.cards[cardIdx];
 
         this.elements.learnQ.textContent = card.term;
+        this.elements.learnQ.style.fontSize = this.autoFontSize(card.term);
         this.elements.learnA.textContent = card.definition;
+        this.elements.learnA.style.fontSize = this.autoFontSize(card.definition);
         this.elements.learnCard.classList.remove('flipped');
 
         this.elements.learnPre.classList.remove('hidden');
@@ -267,10 +303,14 @@ class App {
     }
 
     flipLearnCard() {
-        if (this.elements.learnCard.classList.contains('flipped')) return;
-        this.elements.learnCard.classList.add('flipped');
-        this.elements.learnPre.classList.add('hidden');
-        this.elements.learnPost.classList.remove('hidden');
+        this.elements.learnCard.classList.toggle('flipped');
+        if (this.elements.learnCard.classList.contains('flipped')) {
+            this.elements.learnPre.classList.add('hidden');
+            this.elements.learnPost.classList.remove('hidden');
+        } else {
+            this.elements.learnPre.classList.remove('hidden');
+            this.elements.learnPost.classList.add('hidden');
+        }
     }
 
     /* Scientific SRS Algorithm (Forgetting Curve) */
@@ -317,7 +357,8 @@ class App {
         const dataToUpdate = {
             progress: this.currentSet.progress,
             history: this.currentSet.history,
-            srs: this.currentSet.srs
+            srs: this.currentSet.srs,
+            testStats: this.currentSet.testStats
         };
         dbService.updateProgress(this.currentSet.id, dataToUpdate);
 
@@ -513,7 +554,8 @@ class App {
         dbService.updateProgress(this.currentSet.id, {
             progress: this.currentSet.progress,
             history: this.currentSet.history,
-            srs: this.currentSet.srs
+            srs: this.currentSet.srs,
+            testStats: this.currentSet.testStats
         });
 
         const pct = Math.round((this.testState.score / this.testState.questions.length) * 100);
@@ -544,9 +586,20 @@ class App {
             ts: Date.now()
         });
 
-        if (!correct) {
-            this.currentSet.progress.learn[cardIdx] = 'review';
+        if (!this.currentSet.testStats) this.currentSet.testStats = {};
+        if (!this.currentSet.testStats[cardIdx]) {
+            this.currentSet.testStats[cardIdx] = {
+                totalAttempts: 0,
+                correctAttempts: 0,
+                history: []
+            };
         }
+
+        let stat = this.currentSet.testStats[cardIdx];
+        stat.totalAttempts++;
+        if (correct) stat.correctAttempts++;
+        stat.history.push(correct);
+        if (stat.history.length > 5) stat.history.shift(); // Keep last 5
     }
 
     /* Levenshtein for Fuzzy Match */
@@ -583,11 +636,21 @@ class App {
     // ... Copy remaining helpers (flashcard nav, escapeHtml, openCreateModal etc) ... 
 
     // Re-implementing helper methods to ensure file is complete
+    autoFontSize(text) {
+        const len = text ? text.length : 0;
+        if (len < 30) return '2rem';
+        if (len < 80) return '1.5rem';
+        if (len < 150) return '1.25rem';
+        return '1rem';
+    }
+
     initFlashcards() { this.currentCardIndex = 0; this.updateFlashcard(); }
     updateFlashcard() {
         const card = this.currentSet.cards[this.currentCardIndex];
         this.elements.cardTerm.textContent = card.term;
+        this.elements.cardTerm.style.fontSize = this.autoFontSize(card.term);
         this.elements.cardDef.textContent = card.definition;
+        this.elements.cardDef.style.fontSize = this.autoFontSize(card.definition);
         this.elements.flashcard.classList.remove('flipped');
         this.elements.cardCounter.textContent = `${this.currentCardIndex + 1} / ${this.currentSet.cards.length}`;
     }
@@ -726,7 +789,8 @@ class App {
         const dataToUpdate = {
             progress: this.currentSet.progress,
             history: this.currentSet.history, // In real app, consider using arrayUnion
-            srs: this.currentSet.srs
+            srs: this.currentSet.srs,
+            testStats: this.currentSet.testStats
         };
         dbService.updateProgress(this.currentSet.id, dataToUpdate);
 
@@ -746,12 +810,15 @@ class App {
             ts: Date.now()
         });
 
-        // Also update SRS lightly? For now, let's keep SRS for Learn mode, 
-        // but mark "Weak" in progress if wrong in Test.
-        if (!correct) {
-            this.currentSet.progress.learn[cardIdx] = 'review';
+        if (!this.currentSet.testStats) this.currentSet.testStats = {};
+        if (!this.currentSet.testStats[cardIdx]) {
+            this.currentSet.testStats[cardIdx] = { totalAttempts: 0, correctAttempts: 0, history: [] };
         }
-        // Save happens at finishTest()
+        let stat = this.currentSet.testStats[cardIdx];
+        stat.totalAttempts++;
+        if (correct) stat.correctAttempts++;
+        stat.history.push(correct);
+        if (stat.history.length > 5) stat.history.shift();
     }
 
     // Override init to ensure history/srs exists
